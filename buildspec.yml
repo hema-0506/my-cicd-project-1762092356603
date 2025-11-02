@@ -2,85 +2,74 @@ version: 0.2
 
 phases:
   install:
-    # Specify runtime version if needed
+    # Specify runtime version if needed by your build tools or application
     runtime-versions:
-      nodejs: 18 # Or your required Node.js version
+       nodejs: 18 # Or your required Node.js version
     commands:
-      # --- START: Commands to enter GitHub zip subdirectory ---
-      - echo "Initial working directory:"
-      - pwd
-      - echo "Listing root directory contents:"
-      - ls -lA
-      # Find the top-level directory created by GitHub zipball (assumes only one non-hidden)
-      - export SOURCE_DIR=$(ls -A | grep -v '^\.' | head -n 1) # Find first non-hidden entry
-      - echo "Detected source directory:$SOURCE_DIR"
-      # Use YAML block scalar '|' for multi-line shell command correctness
-      - |
-        if [ -z "$SOURCE_DIR" ] || [ ! -d "$SOURCE_DIR" ]; then 
-          echo "ERROR: Could not find source subdirectory from zipball"
-          ls -A
-          exit 1
-        fi
-      # Change into the source directory
-      - cd "$SOURCE_DIR"
-      - echo "Changed directory to $SOURCE_DIR. New working directory:"
-      - pwd
-      - echo "Contents of source directory '$SOURCE_DIR':"
-      - ls -lA
-      # --- END: Added commands ---
-
-      # --- Install dependencies (now inside the correct directory) ---
+      # Install dependencies for your application
       - echo "Installing application dependencies..."
       - npm install
 
-      # --- Install Security Scan Tools Here (if needed) ---
-      # Examples...
+      # --- Install Security Scan Tools Here ---
+      # Example: Install Snyk CLI (replace with your chosen tools)
       # - npm install -g snyk
+      # Example: Install TruffleHog (requires Python/pip)
       # - pip install trufflehog
-      # - curl --create-dirs -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-latest-linux.zip && unzip sonar.zip && export PATH=$PATH:./sonar-scanner-*/bin
+      # Example: Download SonarScanner (if using SonarQube/SonarCloud)
+      # - curl --create-dirs -sSLo sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-latest-linux.zip
+      # - unzip sonar.zip
+      # - export PATH=$PATH:./sonar-scanner-*/bin
 
   pre_build:
-    commands:
-      # --- Run Security Scans Here ---
-      - echo "Running security scans..."
-      # Examples...
-      # - snyk test --fail-on=high --all-projects || true
-      # - snyk code test --fail-on=high --all-projects || true
-      # - trufflehog git file://. --fail
-      # - sonar-scanner
+     commands:
+       # --- Run Security Scans Here ---
+       - echo "Running security scans..."
+
+       # Example: Run Snyk SCA scan (requires SNYK_TOKEN env var)
+       # - snyk test --fail-on=high --all-projects || true # Use '|| true' if you want pipeline to continue on failure for now
+
+       # Example: Run Snyk Code SAST scan (requires SNYK_TOKEN env var)
+       # - snyk code test --fail-on=high --all-projects || true
+
+       # Example: Run TruffleHog secrets scan
+       # - trufflehog git file://. --fail # Fails build if secrets found
+
+       # Example: Run SonarScanner (requires SONAR_* env vars)
+       # - sonar-scanner
 
   build:
     commands:
       - echo "Build started on `date`"
       - echo "Running build commands (e.g., compilation, tests)..."
       # Add your application build commands here (if any)
-      # Example: npm test
-      # Example: npm run build
+      # Example: Run unit tests
+      # - npm test
+      # Example: Create a production build (for frameworks like React, Angular, etc.)
+      # - npm run build
 
   post_build:
-    commands:
+     commands:
         - echo "Build completed on `date`"
         # Commands to prepare artifacts for deployment
-        # Example: Create zip for Elastic Beanstalk (if needed)
+        # If deploying directly to Elastic Beanstalk (non-Docker), you might not need extra steps
+        # If creating a specific artifact bundle (e.g., for CodeDeploy or specific EB structure):
+        # Example: Create a zip for Elastic Beanstalk deployment
         # - echo "Creating deployment artifact..."
-        # - zip -r ../deployment_package.zip . -x ".git/*" "node_modules/*" # From current (subdir) path
+        # - zip -r ../deployment_package.zip . -x ".git/*" "node_modules/*" "sonar.zip" "sonar-scanner-*" # Exclude unnecessary files
+        # Or if deploying a Docker image (build/push would happen in 'build' or 'post_build')
 
 artifacts:
-  # Define files relative to the current working directory (the SOURCE_DIR)
-  # to be included in the CodeBuild output artifact
+  # Define the files to be included in the CodeBuild output artifact
+  # This artifact is passed to the next stage (Deploy) in CodePipeline
   files:
-    # Include all files needed for deployment from the subdirectory
+    # Include all files needed for deployment
     - '**/*'
-    #1. Include core application files
-    - 'package.json'
-    - 'app.js'
-    # 2. Include all installed Node dependencies
-    - 'node_modules/**/*'
-    # 3. Include the configuration folder
-    - '.ebextensions/**/*'
-  # The base-directory is effectively the $SOURCE_DIR now due to the 'cd' command
-  base-directory: '.' # Optional, '.' is default relative to current dir
+  # If you created a specific zip in post_build for EB/CodeDeploy, use that instead:
+  # files:
+  #  - deployment_package.zip
+  # If deploying Docker, CodeBuild often pushes image directly, artifacts might be empty or contain config files
+  base-directory: '.' # Specify the root directory (where buildspec is)
 
-# cache: # Optional: Define paths to cache relative to $SOURCE_DIR
+# cache: # Optional: Define paths to cache for faster builds
 #   paths:
 #     - 'node_modules/**/*'
